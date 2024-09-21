@@ -1,52 +1,39 @@
 #!/bin/bash
 
-# ... (pozostała część skryptu pozostaje bez zmian)
+ARCH=$(uname -m)
+WALLET_DIR="$HOME/hemi_wallets"
+LOG_DIR="$HOME/hemi_logs"
 
-# Dodaj tę funkcję na końcu skryptu, przed główną pętlą:
-
-view_logs() {
-    local wallet_number=$1
-    local log_file="$LOG_DIR/hemi_wallet_$wallet_number.log"
-    
-    if [ -f "$log_file" ]; then
-        tail -f "$log_file"
-    else
-        show "Log file for wallet $wallet_number not found."
-    fi
+# Define the show function at the beginning of the script
+show() {
+    echo -e "\033[1;35m$1\033[0m"
 }
 
-# Zmodyfikuj główną pętlę, aby dodać opcję przeglądania logów:
+# Check and install jq if not present
+if ! command -v jq &> /dev/null; then
+    show "jq not found, installing..."
+    sudo apt-get update
+    sudo apt-get install -y jq > /dev/null 2>&1
+    if [ $? -ne 0 ]; then
+        show "Failed to install jq. Please check your package manager."
+        exit 1
+    fi
+fi
 
-wallet_count=0
-while true; do
-    echo
-    show "1. Create a new wallet and start mining"
-    show "2. View logs for an existing wallet"
-    show "3. Exit"
-    read -p "Choose an option (1/2/3): " choice
-    
-    case $choice in
-        1)
-            wallet_count=$((wallet_count + 1))
-            show "Creating wallet $wallet_count"
-            if generate_wallet $wallet_count; then
-                create_and_start_service $wallet_count
-            else
-                wallet_count=$((wallet_count - 1))
-            fi
-            ;;
-        2)
-            read -p "Enter wallet number to view logs: " log_wallet
-            view_logs $log_wallet
-            ;;
-        3)
-            break
-            ;;
-        *)
-            show "Invalid option. Please try again."
-            ;;
-    esac
-done
+# Function to check latest version
+check_latest_version() {
+    for i in {1..3}; do
+        LATEST_VERSION=$(curl -s https://api.github.com/repos/hemilabs/heminetwork/releases/latest | jq -r '.tag_name')
+        if [ -n "$LATEST_VERSION" ]; then
+            show "Latest version available: $LATEST_VERSION"
+            return 0
+        fi
+        show "Attempt $i: Failed to fetch the latest version. Retrying..."
+        sleep 2
+    done
 
-show "PoP mining successfully started for $wallet_count wallet(s)"
-show "You can check the logs for each wallet in the $LOG_DIR directory"
+    show "Failed to fetch the latest version after 3 attempts. Please check your internet connection or GitHub API limits."
+    exit 1
+}
+
+# Rest of the script continues here...
